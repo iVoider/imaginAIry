@@ -29,7 +29,10 @@ class KDiffusionSampler:
         img_callback=None,
     ):
         size = (batch_size, *shape)
-
+        print("log")
+        print(torch.randn(size, device="cpu").to(get_device()).shape)
+        print(initial_noise_tensor.shape)
+        
         initial_noise_tensor = (
             torch.randn(size, device="cpu").to(get_device())
             if initial_noise_tensor is None
