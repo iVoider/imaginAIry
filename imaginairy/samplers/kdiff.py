@@ -2,7 +2,7 @@
 import torch
 
 from imaginairy.img_log import log_latent
-from imaginairy.samplers.base import CFGDenoiser
+from imaginairy.samplers.base import CFGDenoiser, KCFGDenoiser
 from imaginairy.utils import get_device
 from imaginairy.vendored.k_diffusion import sampling as k_sampling
 from imaginairy.vendored.k_diffusion.external import CompVisDenoiser
@@ -27,11 +27,11 @@ class KDiffusionSampler:
         eta,
         initial_noise_tensor=None,
         img_callback=None,
+        use_seq_weightning = False,
+        cond_arities = None,
+        cond_weights = None
     ):
         size = (batch_size, *shape)
-        print("log")
-        print(torch.randn(size, device="cpu").to(get_device()).shape)
-        print(initial_noise_tensor.shape)
         
         initial_noise_tensor = (
             torch.randn(size, device="cpu").to(get_device())
@@ -44,7 +44,23 @@ class KDiffusionSampler:
 
         x = initial_noise_tensor * sigmas[0]
         log_latent(x, "initial_sigma_noised_tensor")
-        model_wrap_cfg = CFGDenoiser(self.cv_denoiser)
+
+        if use_seq_weightning:
+            model_wrap_cfg = KCFGDenoiser(self.cv_denoiser)
+            args = {
+                "cond": conditioning,
+                "uncond": unconditional_conditioning,
+                "cond_scale": unconditional_guidance_scale,
+                "cond_arities": cond_arities,
+                "cond_weights": cond_weights
+            }
+        else:
+            model_wrap_cfg = CFGDenoiser(self.cv_denoiser)
+            args = {
+                "cond": conditioning,
+                "uncond": unconditional_conditioning,
+                "cond_scale": unconditional_guidance_scale,
+            }
 
         def callback(data):
             log_latent(data["x"], "x")
@@ -54,11 +70,7 @@ class KDiffusionSampler:
             model_wrap_cfg,
             x,
             sigmas,
-            extra_args={
-                "cond": conditioning,
-                "uncond": unconditional_conditioning,
-                "cond_scale": unconditional_guidance_scale,
-            },
+            extra_args=args,
             disable=False,
             callback=callback,
         )
