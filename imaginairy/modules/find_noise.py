@@ -8,8 +8,6 @@ needs https://github.com/crowsonkb/k-diffusion
 """
 
 from contextlib import nullcontext
-from typing import Iterable, TypeAlias, List
-
 from imaginairy.api import load_model
 from PIL import Image
 import torch
@@ -21,9 +19,6 @@ from imaginairy.schema import ImagineResult
 from imaginairy import ImaginePrompt
 from einops import rearrange
 import numpy as np
-from dataclasses import dataclass
-import abc
-from enum import Enum
 
 from imaginairy.utils import (
     fix_torch_group_norm,
