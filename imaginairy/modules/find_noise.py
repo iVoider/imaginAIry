@@ -137,10 +137,8 @@ def from_noise(
 
                 if use_seq_weightning:
                     print("Prompts length: " + str(len(prompts)))
-                    texts = [subprompt.text for subprompt in from_prompts] + [subprompt.text for subprompt in
-                                                                              target_prompts]
-                    cond_weights = [1.0 - interpolation_percent for _ in from_prompts] + [interpolation_percent for _ in
-                                                                                          target_prompts]
+                    texts = from_prompts + target_prompts
+                    cond_weights = [1.0 - interpolation_percent for _ in from_prompts] + [interpolation_percent for _ in target_prompts]
                     cond_arities = [len(cond_weights)]
                     c = model.get_learned_conditioning(texts)
 
