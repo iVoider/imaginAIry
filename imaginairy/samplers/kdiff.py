@@ -17,22 +17,22 @@ class KDiffusionSampler:
         self.sampler_func = getattr(k_sampling, f"sample_{sampler_name}")
 
     def sample(
-        self,
-        num_steps,
-        conditioning,
-        batch_size,
-        shape,
-        unconditional_guidance_scale,
-        unconditional_conditioning,
-        eta,
-        initial_noise_tensor=None,
-        img_callback=None,
-        use_seq_weightning = False,
-        cond_arities = None,
-        cond_weights = None
+            self,
+            num_steps,
+            conditioning,
+            batch_size,
+            shape,
+            unconditional_guidance_scale,
+            unconditional_conditioning,
+            eta,
+            initial_noise_tensor=None,
+            img_callback=None,
+            use_seq_weightning=False,
+            cond_arities=None,
+            cond_weights=None
     ):
         size = (batch_size, *shape)
-        
+
         initial_noise_tensor = (
             torch.randn(size, device="cpu").to(get_device())
             if initial_noise_tensor is None

@@ -8,6 +8,8 @@ needs https://github.com/crowsonkb/k-diffusion
 """
 
 from contextlib import nullcontext
+from typing import Iterable, TypeAlias, List
+
 from imaginairy.api import load_model
 from PIL import Image
 import torch
@@ -19,6 +21,9 @@ from imaginairy.schema import ImagineResult
 from imaginairy import ImaginePrompt
 from einops import rearrange
 import numpy as np
+from dataclasses import dataclass
+import abc
+from enum import Enum
 
 from imaginairy.utils import (
     fix_torch_group_norm,
@@ -94,6 +99,9 @@ def find_noise_for_latent(model, img_latent, prompt, steps=50, cond_scale=1.0):
 
 def from_noise(
         prompts,
+        from_prompts=None,
+        target_prompts=None,
+        interpolation_percent=None,
         latent_channels=4,
         downsampling_factor=8,
         precision="autocast",
@@ -103,9 +111,6 @@ def from_noise(
         initial_noise_tensor=None,
         initial_text_cond=None,
         use_seq_weightning=False,
-        cond_weights=None,
-        cond_arities=None,
-        texts=None
 ):
     model = load_model()
 
@@ -136,6 +141,12 @@ def from_noise(
                     log_conditioning(uc, "neutral conditioning")
 
                 if use_seq_weightning:
+                    print("Prompts length: " + str(len(prompts)))
+                    texts = [subprompt.text for subprompt in from_prompts] + [subprompt.text for subprompt in
+                                                                              target_prompts]
+                    cond_weights = [1.0 - interpolation_percent for _ in from_prompts] + [interpolation_percent for _ in
+                                                                                          target_prompts]
+                    cond_arities = [len(cond_weights)]
                     c = model.get_learned_conditioning(texts)
 
                 elif prompt.conditioning is not None:
