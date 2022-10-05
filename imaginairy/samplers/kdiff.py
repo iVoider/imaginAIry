@@ -24,9 +24,7 @@ class KDiffusionSampler:
             shape,
             unconditional_guidance_scale,
             unconditional_conditioning,
-            eta,
             initial_noise_tensor=None,
-            img_callback=None,
             use_seq_weightning=False,
             cond_arities=None,
             cond_weights=None
@@ -46,6 +44,7 @@ class KDiffusionSampler:
         log_latent(x, "initial_sigma_noised_tensor")
 
         if use_seq_weightning:
+            print(unconditional_conditioning.size(), conditioning.size())
             model_wrap_cfg = KCFGDenoiser(self.cv_denoiser)
             args = {
                 "cond": conditioning,
