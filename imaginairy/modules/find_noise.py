@@ -126,7 +126,7 @@ def find_noise_for_latent_multi(model, img_latent, prompts, cond_weights: Option
     with torch.no_grad():
         with _autocast(get_device()):
             for i in range(1, len(sigmas)):
-                cond_arities_tensor = torch.tensor(cond_arities, device=cond_in.device)
+                cond_arities_tensor = torch.tensor(cond_arities, device=cond.device)
                 cond_count = cond.size(dim=0)
                 uncond_count = uncond.size(dim=0)
                 x_in = cat_self_with_repeat_interleaved(t=x,
