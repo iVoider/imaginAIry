@@ -24,7 +24,9 @@ class KDiffusionSampler:
             shape,
             unconditional_guidance_scale,
             unconditional_conditioning,
+            eta,
             initial_noise_tensor=None,
+            img_callback=None,
             use_seq_weightning=False,
             cond_arities=None,
             cond_weights=None
