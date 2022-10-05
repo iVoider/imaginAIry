@@ -93,7 +93,10 @@ class KCFGDenoiser(nn.Module):
         sigma_in = cat_self_with_repeat_interleaved(t=sigma, factors_tensor=cond_arities_tensor, factors=cond_arities,
                                                     output_size=cond_count)
         del sigma
+
+        print(x_in.size(), sigma_in.size(), cond_in.size())
         uncond_out, conds_out = self.inner_model(x_in, sigma_in, cond=cond_in).split([uncond_count, cond_count])
+        print(uncond_out.size(), conds_out.size())
         del x_in, sigma_in, cond_in
         unconds = repeat_interleave_along_dim_0(t=uncond_out, factors_tensor=cond_arities_tensor, factors=cond_arities,
                                                 output_size=cond_count)
