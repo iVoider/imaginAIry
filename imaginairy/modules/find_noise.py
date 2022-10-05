@@ -8,13 +8,16 @@ needs https://github.com/crowsonkb/k-diffusion
 """
 
 from contextlib import nullcontext
+from typing import Iterable, Optional
+
 from imaginairy.api import load_model
 from PIL import Image
 import torch
-from torch import autocast
+from torch import autocast, Tensor
 from imaginairy.img_utils import pillow_img_to_model_latent
 from imaginairy.vendored import k_diffusion as K
-from imaginairy.samplers.base import get_sampler
+from imaginairy.samplers.base import get_sampler, cat_self_with_repeat_interleaved, repeat_interleave_along_dim_0, \
+    sum_along_slices_of_dim_0
 from imaginairy.schema import ImagineResult
 from imaginairy import ImaginePrompt
 from einops import rearrange
@@ -39,6 +42,20 @@ def find_noise_for_image(model, pil_img, prompt, steps=50, cond_scale=1.0, half=
         model,
         img_latent,
         prompt,
+        steps=steps,
+        cond_scale=cond_scale,
+    )
+
+
+def find_noise_for_image_multi(model, pil_img, prompts, cond_weights: Optional[Iterable[float]],
+                               cond_arities: Iterable[int], steps=50, cond_scale=1.0, half=True):
+    img_latent = pillow_img_to_model_latent(model, pil_img, batch_size=1, half=half)
+    return find_noise_for_latent_multi(
+        model,
+        img_latent,
+        prompts,
+        cond_weights,
+        cond_arities,
         steps=steps,
         cond_scale=cond_scale,
     )
@@ -92,6 +109,75 @@ def find_noise_for_latent(model, img_latent, prompt, steps=50, cond_scale=1.0):
             return x / x.std()
 
 
+def find_noise_for_latent_multi(model, img_latent, prompts, cond_weights: Optional[Iterable[float]],
+                                cond_arities: Iterable[int], steps=50, cond_scale=1.0):
+    x = img_latent
+
+    _autocast = autocast if get_device() in ("cuda", "cpu") else nullcontext
+    with torch.no_grad():
+        with _autocast(get_device()):
+            uncond = model.get_learned_conditioning([""])
+            cond = model.get_learned_conditioning(prompts)
+
+    s_in = x.new_ones([x.shape[0]])
+    dnw = K.external.CompVisDenoiser(model)
+    sigmas = dnw.get_sigmas(steps).flip(0)
+
+    with torch.no_grad():
+        with _autocast(get_device()):
+            for i in range(1, len(sigmas)):
+                cond_arities_tensor = torch.tensor(cond_arities, device=cond_in.device)
+                cond_count = cond.size(dim=0)
+                uncond_count = uncond.size(dim=0)
+                x_in = cat_self_with_repeat_interleaved(t=x,
+                                                        factors_tensor=cond_arities_tensor,
+                                                        factors=cond_arities,
+                                                        output_size=cond_count)
+                sigma_in = cat_self_with_repeat_interleaved(t=sigmas[i] * s_in,
+                                                            factors_tensor=cond_arities_tensor,
+                                                            factors=cond_arities,
+                                                            output_size=cond_count)
+                cond_in = torch.cat([uncond, cond])
+
+                c_out, c_in = [
+                    K.utils.append_dims(k, x_in.ndim) for k in dnw.get_scalings(sigma_in)
+                ]
+                t = dnw.sigma_to_t(sigma_in)
+
+                eps = model.apply_model(x_in * c_in, t, cond=cond_in)
+                uncond_out, conds_out = (x_in + eps * c_out).split([uncond_count, cond_count])
+
+                unconds = repeat_interleave_along_dim_0(t=uncond_out, factors_tensor=cond_arities_tensor,
+                                                        factors=cond_arities,
+                                                        output_size=cond_count)
+                weight_tensor = (
+                        torch.tensor(cond_weights, device=uncond_out.device, dtype=unconds.dtype) * cond_scale).reshape(
+                    len(cond_weights), 1, 1, 1)
+                deltas: Tensor = (conds_out - unconds) * weight_tensor
+                del conds_out, unconds, weight_tensor
+                cond = sum_along_slices_of_dim_0(deltas, arities=cond_arities)
+                del deltas
+
+                denoised = uncond_out + cond
+                del uncond_out, conds_out
+
+                d = (x - denoised) / sigmas[i]
+                dt = sigmas[i] - sigmas[i - 1]
+
+                x = x + d * dt
+
+                del (
+                    x_in,
+                    sigma_in,
+                    cond_in,
+                    c_out,
+                    c_in,
+                    t,
+                )
+                del eps, denoised, d, dt
+
+            return x / x.std()
+
 def from_noise(
         prompts,
         from_prompts=None,
@@ -138,7 +224,8 @@ def from_noise(
                 if use_seq_weightning:
                     print("Prompts length: " + str(len(prompts)))
                     texts = from_prompts + target_prompts
-                    cond_weights = [1.0 - interpolation_percent for _ in from_prompts] + [interpolation_percent for _ in target_prompts]
+                    cond_weights = [1.0 - interpolation_percent for _ in from_prompts] + [interpolation_percent for _ in
+                                                                                          target_prompts]
                     cond_arities = [len(cond_weights)]
                     c = model.get_learned_conditioning(texts)
 
