@@ -178,20 +178,20 @@ def find_noise_for_latent_multi(model, img_latent, prompts, cond_weights: Option
 
             return x / x.std()
 
+
 def from_noise(
         prompts,
-        from_prompts=None,
-        target_prompts=None,
-        interpolation_percent=None,
+        texts,
+        initial_noise_tensor=None,
+        initial_text_cond=None,
+        cond_weights=None,
+        use_seq_weightning=False,
         latent_channels=4,
         downsampling_factor=8,
         precision="autocast",
         ddim_eta=0.0,
-        img_callback=None,
         half_mode=None,
-        initial_noise_tensor=None,
-        initial_text_cond=None,
-        use_seq_weightning=False,
+        img_callback=None,
 ):
     model = load_model()
 
@@ -222,10 +222,6 @@ def from_noise(
                     log_conditioning(uc, "neutral conditioning")
 
                 if use_seq_weightning:
-                    print("Prompts length: " + str(len(prompts)))
-                    texts = from_prompts + target_prompts
-                    cond_weights = [1.0 - interpolation_percent for _ in from_prompts] + [interpolation_percent for _ in
-                                                                                          target_prompts]
                     cond_arities = [len(cond_weights)]
                     c = model.get_learned_conditioning(texts)
 
