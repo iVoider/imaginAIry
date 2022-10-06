@@ -84,7 +84,6 @@ class KCFGDenoiser(nn.Module):
     ) -> Tensor:
         uncond_count = uncond.size(dim=0)
         cond_count = cond.size(dim=0)
-        print(uncond.size(), cond.size())
         cond_in = torch.cat((uncond, cond))
         del uncond, cond
         cond_arities_tensor = torch.tensor(cond_arities, device=cond_in.device)

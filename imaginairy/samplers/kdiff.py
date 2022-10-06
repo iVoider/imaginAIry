@@ -46,7 +46,6 @@ class KDiffusionSampler:
         log_latent(x, "initial_sigma_noised_tensor")
 
         if use_seq_weightning:
-            print(unconditional_conditioning.size(), conditioning.size())
             model_wrap_cfg = KCFGDenoiser(self.cv_denoiser)
             args = {
                 "cond": conditioning,
