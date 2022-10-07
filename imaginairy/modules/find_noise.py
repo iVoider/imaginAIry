@@ -165,11 +165,9 @@ def from_noise(
             ):
                 model.tile_mode(prompt.tile_mode)
 
-                uc = None
-                if prompt.prompt_strength != 1.0:
-                    uc = model.get_learned_conditioning(negative_prompts)
-                    log_conditioning(uc, "neutral conditioning")
-
+                uc = model.get_learned_conditioning(negative_prompts)
+                log_conditioning(uc, "neutral conditioning")
+                    
                 if use_seq_weightning:
                     cond_arities = [len(cond_weights)]
                     c = model.get_learned_conditioning(prompts)
