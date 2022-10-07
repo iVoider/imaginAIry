@@ -66,6 +66,7 @@ def sample_euler(
     extra_args = {} if extra_args is None else extra_args
     if "s_churn" in extra_args:
         s_churn = extra_args["s_churn"]
+        del extra_args["s_churn"]
 
     s_in = x.new_ones([x.shape[0]])
     for i in trange(len(sigmas) - 1, disable=disable):
