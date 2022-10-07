@@ -36,87 +36,33 @@ from imaginairy.img_log import (
 )
 
 
-def find_noise_for_image(model, pil_img, prompt, steps=50, cond_scale=1.0, half=True):
+def find_noise_for_image(model, pil_img, prompts: Iterable[str],
+                         negative_prompts: Iterable[str], cond_weights: Optional[Iterable[float]],
+                         cond_arities: Iterable[int], steps=50, cond_scale=1.0, half=True):
     img_latent = pillow_img_to_model_latent(model, pil_img, batch_size=1, half=half)
     return find_noise_for_latent(
-        model,
-        img_latent,
-        prompt,
-        steps=steps,
-        cond_scale=cond_scale,
-    )
-
-
-def find_noise_for_image_multi(model, pil_img, prompts, cond_weights: Optional[Iterable[float]],
-                               cond_arities: Iterable[int], steps=50, cond_scale=1.0, half=True):
-    img_latent = pillow_img_to_model_latent(model, pil_img, batch_size=1, half=half)
-    return find_noise_for_latent_multi(
         model,
         img_latent,
         prompts,
         cond_weights,
         cond_arities,
+        negative_prompts,
         steps=steps,
         cond_scale=cond_scale,
     )
 
 
-def find_noise_for_latent(model, img_latent, prompt, steps=50, cond_scale=1.0):
+def find_noise_for_latent(model, img_latent, prompts: Iterable[str],
+                          cond_weights: Optional[Iterable[float]],
+                          cond_arities: Iterable[int],
+                          negative_prompts: Iterable[str] = 1 * [""],
+                          steps=50, cond_scale=1.0):
     x = img_latent
 
     _autocast = autocast if get_device() in ("cuda", "cpu") else nullcontext
     with torch.no_grad():
         with _autocast(get_device()):
-            uncond = model.get_learned_conditioning([""])
-            cond = model.get_learned_conditioning([prompt])
-
-    s_in = x.new_ones([x.shape[0]])
-    dnw = K.external.CompVisDenoiser(model)
-    sigmas = dnw.get_sigmas(steps).flip(0)
-
-    with torch.no_grad():
-        with _autocast(get_device()):
-            for i in range(1, len(sigmas)):
-                x_in = torch.cat([x] * 2)
-                sigma_in = torch.cat([sigmas[i] * s_in] * 2)
-                cond_in = torch.cat([uncond, cond])
-
-                c_out, c_in = [
-                    K.utils.append_dims(k, x_in.ndim) for k in dnw.get_scalings(sigma_in)
-                ]
-                t = dnw.sigma_to_t(sigma_in)
-
-                eps = model.apply_model(x_in * c_in, t, cond=cond_in)
-                denoised_uncond, denoised_cond = (x_in + eps * c_out).chunk(2)
-
-                denoised = denoised_uncond + (denoised_cond - denoised_uncond) * cond_scale
-
-                d = (x - denoised) / sigmas[i]
-                dt = sigmas[i] - sigmas[i - 1]
-
-                x = x + d * dt
-
-                del (
-                    x_in,
-                    sigma_in,
-                    cond_in,
-                    c_out,
-                    c_in,
-                    t,
-                )
-                del eps, denoised_uncond, denoised_cond, denoised, d, dt
-
-            return x / x.std()
-
-
-def find_noise_for_latent_multi(model, img_latent, prompts, cond_weights: Optional[Iterable[float]],
-                                cond_arities: Iterable[int], steps=50, cond_scale=1.0):
-    x = img_latent
-
-    _autocast = autocast if get_device() in ("cuda", "cpu") else nullcontext
-    with torch.no_grad():
-        with _autocast(get_device()):
-            uncond = model.get_learned_conditioning([""])
+            uncond = model.get_learned_conditioning(negative_prompts)
             cond = model.get_learned_conditioning(prompts)
 
     s_in = x.new_ones([x.shape[0]])
@@ -137,29 +83,33 @@ def find_noise_for_latent_multi(model, img_latent, prompts, cond_weights: Option
                                                             factors_tensor=cond_arities_tensor,
                                                             factors=cond_arities,
                                                             output_size=cond_count)
-                cond_in = torch.cat([uncond, cond])
+                cond_in = torch.cat((uncond, cond))
 
                 c_out, c_in = [
                     K.utils.append_dims(k, x_in.ndim) for k in dnw.get_scalings(sigma_in)
                 ]
+
                 t = dnw.sigma_to_t(sigma_in)
 
                 eps = model.apply_model(x_in * c_in, t, cond=cond_in)
+
                 uncond_out, conds_out = (x_in + eps * c_out).split([uncond_count, cond_count])
+                del eps, c_out, x_in
 
                 unconds = repeat_interleave_along_dim_0(t=uncond_out, factors_tensor=cond_arities_tensor,
                                                         factors=cond_arities,
                                                         output_size=cond_count)
+
                 weight_tensor = (
                         torch.tensor(cond_weights, device=uncond_out.device, dtype=unconds.dtype) * cond_scale).reshape(
                     len(cond_weights), 1, 1, 1)
                 deltas: Tensor = (conds_out - unconds) * weight_tensor
                 del conds_out, unconds, weight_tensor
-                cond = sum_along_slices_of_dim_0(deltas, arities=cond_arities)
+                conda = sum_along_slices_of_dim_0(deltas, arities=cond_arities)
                 del deltas
 
-                denoised = uncond_out + cond
-                del uncond_out, conds_out
+                denoised = uncond_out + conda
+                del uncond_out, conda
 
                 d = (x - denoised) / sigmas[i]
                 dt = sigmas[i] - sigmas[i - 1]
@@ -167,21 +117,20 @@ def find_noise_for_latent_multi(model, img_latent, prompts, cond_weights: Option
                 x = x + d * dt
 
                 del (
-                    x_in,
                     sigma_in,
                     cond_in,
-                    c_out,
                     c_in,
                     t,
                 )
-                del eps, denoised, d, dt
+                del denoised, d, dt
 
             return x / x.std()
 
 
 def from_noise(
+        requests,
         prompts,
-        texts,
+        negative_prompts=1 * [""],
         initial_noise_tensor=None,
         initial_text_cond=None,
         cond_weights=None,
@@ -201,14 +150,14 @@ def from_noise(
         model = model.half()
         # needed when model is in half mode, remove if not using half mode
         # torch.set_default_tensor_type(torch.HalfTensor)
-    prompts = [ImaginePrompt(prompts)] if isinstance(prompts, str) else prompts
-    prompts = [prompts] if isinstance(prompts, ImaginePrompt) else prompts
+    requests = [ImaginePrompt(requests)] if isinstance(requests, str) else requests
+    requests = [requests] if isinstance(requests, ImaginePrompt) else requests
     _img_callback = None
 
     with torch.no_grad(), platform_appropriate_autocast(
             precision
     ), fix_torch_nn_layer_norm(), fix_torch_group_norm():
-        for prompt in prompts:
+        for prompt in requests:
             with ImageLoggingContext(
                     prompt=prompt,
                     model=model,
@@ -218,12 +167,12 @@ def from_noise(
 
                 uc = None
                 if prompt.prompt_strength != 1.0:
-                    uc = model.get_learned_conditioning(1 * [""])
+                    uc = model.get_learned_conditioning(negative_prompts)
                     log_conditioning(uc, "neutral conditioning")
 
                 if use_seq_weightning:
                     cond_arities = [len(cond_weights)]
-                    c = model.get_learned_conditioning(texts)
+                    c = model.get_learned_conditioning(prompts)
 
                 elif prompt.conditioning is not None:
                     c = prompt.conditioning

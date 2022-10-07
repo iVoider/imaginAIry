@@ -12,7 +12,6 @@ class KDiffusionSampler:
     def __init__(self, model, sampler_name):
         self.model = model
         self.cv_denoiser = CompVisDenoiser(model)
-        # self.cfg_denoiser = CompVisDenoiser(self.cv_denoiser)
         self.sampler_name = sampler_name
         self.sampler_func = getattr(k_sampling, f"sample_{sampler_name}")
 
