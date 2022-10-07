@@ -131,6 +131,7 @@ def from_noise(
         requests,
         prompts,
         negative_prompts=1 * [""],
+        s_churn=0.0,
         initial_noise_tensor=None,
         initial_text_cond=None,
         cond_weights=None,
@@ -167,7 +168,7 @@ def from_noise(
 
                 uc = model.get_learned_conditioning(negative_prompts)
                 log_conditioning(uc, "neutral conditioning")
-                    
+
                 if use_seq_weightning:
                     cond_arities = [len(cond_weights)]
                     c = model.get_learned_conditioning(prompts)
@@ -209,7 +210,8 @@ def from_noise(
                         img_callback=_img_callback,
                         use_seq_weightning=True,
                         cond_arities=cond_arities,
-                        cond_weights=cond_weights
+                        cond_weights=cond_weights,
+                        s_churn=s_churn
                     )
                 else:
                     samples = sampler.sample(

@@ -24,6 +24,7 @@ class KDiffusionSampler:
             unconditional_guidance_scale,
             unconditional_conditioning,
             eta,
+            s_churn=0.0,
             initial_noise_tensor=None,
             img_callback=None,
             use_seq_weightning=False,
@@ -51,7 +52,8 @@ class KDiffusionSampler:
                 "uncond": unconditional_conditioning,
                 "cond_scale": unconditional_guidance_scale,
                 "cond_arities": cond_arities,
-                "cond_weights": cond_weights
+                "cond_weights": cond_weights,
+                "s_churn": s_churn
             }
         else:
             model_wrap_cfg = CFGDenoiser(self.cv_denoiser)
