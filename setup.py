@@ -39,7 +39,7 @@ setup(
         "torch>=1.2.0",
         "numpy",
         "tqdm",
-        "diffusers",
+        "diffusers==0.12.1",
         "imageio==2.9.0",
         "Pillow>=8.0.0",
         "pytorch-lightning==1.4.2",
